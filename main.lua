@@ -1,51 +1,136 @@
--- Lấy các dịch vụ cần thiết
-local players = game:GetService("Players")
-local runService = game:GetService("RunService")
+-- Dịch vụ Roblox
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local UserInputService = game:GetService("UserInputService")
 
--- Người chơi và Giao diện người chơi cục bộ
-local localPlayer = players.LocalPlayer
-local playerGui = localPlayer.PlayerGui
+local localPlayer = Players.LocalPlayer
+local camera = workspace.CurrentCamera
 
--- Thiết lập các vị trí và hướng cố định (CFrame)
-local targetCharacterCF = CFrame.new(-3.60833001, 8.23878479, 1086.20959, 0.554133475, 1.06071141e-07, 0.832427859, -3.82406036e-08, 1, -1.01967686e-07, -0.832427859, 2.46711629e-08, 0.554133475)
-local targetCameraCF = CFrame.new(-3.31953573, 135.794174, 1108.43481, 0.99991554, -0.0127955256, 0.00225620484, 0, 0.173648804, 0.98480773, -0.0129929176, -0.984724581, 0.173634157)
+-- Lấy Material UI
+local Material = loadstring(game:HttpGet("https://raw.githubusercontent.com/HairBaconGamming/Gamming-Material-HUB/main/Main.lua"))()
+local Main = Material:Load({
+    Title = "Macro Controller",
+    SmothDrag = true,
+    Key = Enum.KeyCode.RightShift, -- Ấn RightShift để ẩn/hiện UI
+})
 
--- Lấy Camera và Nhân vật
-local currentCamera = workspace.CurrentCamera
+-- Tab Macro
+local MacroTab = Main:New({
+    Title = "Macro",
+    ImageId = 0
+})
+
+-- Dữ liệu macro
+local isRecording = false
+local macroData = {}
+
+-- Hàm ghi macro
+local function startRecording()
+    isRecording = true
+    macroData = {}
+    print("Macro recording started.")
+end
+
+local function stopRecording()
+    isRecording = false
+    print("Macro recording stopped. Frames:", #macroData)
+end
+
+-- Hàm phát macro
+local function playMacro()
+    print("Playing macro...")
+    for _, entry in ipairs(macroData) do
+        task.wait(entry.delay)
+        if entry.type == "camera" then
+            camera.CFrame = entry.cframe
+        elseif entry.type == "key" then
+            VirtualInputManager:SendKeyEvent(true, entry.key, false, game)
+            task.wait(0.05)
+            VirtualInputManager:SendKeyEvent(false, entry.key, false, game)
+        elseif entry.type == "mouse" then
+            mousemoveabs(entry.x, entry.y)
+            if entry.click then mouse1click() end
+        end
+    end
+    print("Macro finished.")
+end
+
+-- Nút Record
+local RecordBtn = MacroTab:Button({
+    Title = "Start Recording",
+    Callback = function()
+        if isRecording then
+            stopRecording()
+            RecordBtn:SetTitle("Start Recording")
+        else
+            startRecording()
+            RecordBtn:SetTitle("Stop Recording")
+        end
+    end
+})
+
+-- Nút Play
+local PlayBtn = MacroTab:Button({
+    Title = "Play Macro",
+    Callback = function()
+        if not isRecording and #macroData > 0 then
+            playMacro()
+        end
+    end
+})
+
+-- Toggle để cố định camera scriptable
+local CameraToggle = MacroTab:Toggle({
+    Title = "Lock Camera Scriptable",
+    Enabled = false,
+    Callback = function(enabled)
+        if enabled then
+            camera.CameraType = Enum.CameraType.Scriptable
+        else
+            camera.CameraType = Enum.CameraType.Custom
+        end
+        return enabled
+    end
+})
+
+-- Ghi liên tục camera mỗi frame khi đang record
+RunService.RenderStepped:Connect(function(dt)
+    if isRecording then
+        table.insert(macroData, {
+            type = "camera",
+            cframe = camera.CFrame,
+            delay = dt
+        })
+    end
+end)
+
+-- Ghi phím bấm
+UserInputService.InputBegan:Connect(function(input, gp)
+    if isRecording and input.UserInputType == Enum.UserInputType.Keyboard then
+        table.insert(macroData, {
+            type = "key",
+            key = input.KeyCode,
+            delay = 0
+        })
+    end
+end)
+
+-- Ghi chuột click trái
+UserInputService.InputBegan:Connect(function(input, gp)
+    if isRecording and input.UserInputType == Enum.UserInputType.MouseButton1 then
+        local pos = UserInputService:GetMouseLocation()
+        table.insert(macroData, {
+            type = "mouse",
+            x = pos.X,
+            y = pos.Y,
+            click = true,
+            delay = 0
+        })
+    end
+end)
+
+-- Cố định nhân vật nếu cần
 local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
 local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
-
--- Tìm nút "Boss Rush"
-local difficultyFrame = playerGui:WaitForChild("MainGui"):WaitForChild("Difficulty"):WaitForChild("Holder")
-local difficultyBtn
-
--- Đợi cho đến khi cửa sổ game được kích hoạt
-while not isrbxactive() do
-	task.wait()
-end
-
-task.wait(5) -- Đợi 5 giây
-
--- Tìm và nhấp vào nút "Boss Rush"
-for _, v in pairs(difficultyFrame:GetChildren()) do
-	if v:IsA("ImageButton") and v.Name == "Difficulty" and v.Difficulty.Text == "Boss Rush" then
-		difficultyBtn = v
-		break
-	end
-end
-
-if difficultyBtn then
-	mousemoveabs(difficultyBtn.AbsolutePosition.X + 50, difficultyBtn.AbsolutePosition.Y + 50)
-	task.wait(0.05)
-	mouse1click()
-	task.wait(0.5)
-end
-
--- Cố định nhân vật và camera
-humanoidRootPart.Anchored = true -- Giữ nhân vật không bị ảnh hưởng bởi trọng lực
-currentCamera.CameraType = Enum.CameraType.Scriptable -- Cho phép kịch bản điều khiển camera
-
-if character and humanoidRootPart then
-	humanoidRootPart.CFrame = targetCharacterCF
-end
-currentCamera.CFrame = targetCameraCF
+humanoidRootPart.Anchored = true
